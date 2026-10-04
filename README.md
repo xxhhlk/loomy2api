@@ -28,6 +28,7 @@ Authorization: Bearer <session>
 token: <session>                       # session 模式双写
 traceparent: 00-<32hex>-<16hex>-01     # 必需，缺失会挂死到超时
 loomy-version: <app version>
+# 会话关联头（有则带）：ChatId / MsgId / TurnId
 
 body: { model, messages, temperature, max_tokens, stream,
         enable_thinking, chat_template_kwargs: { enable_thinking } }
@@ -35,6 +36,21 @@ body: { model, messages, temperature, max_tokens, stream,
 
 - 模型列表：`GET {baseURL}/models`（OpenAI 兼容）
 - 模型标识形态：`provider/model`，例：`imodel/spark-x`
+
+### 响应形态
+
+- 非流式：`choices[].message.reasoning_content`（思考）+ `content`；`usage` 含
+  `completion_tokens_details.reasoning_tokens`（思考 token）、`points_consumed`（消耗积分）、
+  `prompt_tokens_details.cached_tokens`（命中缓存）
+- 流式：标准 OpenAI SSE（`data: {...}` 分片，末尾 `data: [DONE]`）
+
+### 已知模型
+
+| ID | 用途 |
+| --- | --- |
+| `imodel/spark-x` | 主对话模型（讯飞星火 X） |
+| `imodel/doubao-seed-2.0-mini` | 轻量（知识库媒体摘要硬锁定） |
+| `imodel-anthropic` | Anthropic companion provider（走 `{baseURL}/messages`，与 OpenAI 不兼容） |
 
 ## 账号 API（base = `account.xfinfr.com`）
 
@@ -51,6 +67,14 @@ body: { model, messages, temperature, max_tokens, stream,
 
 ## session
 
+会话文件（导入型渠道从这里读取）：
+
+| 平台 | 路径 |
+| --- | --- |
+| Windows | `C:\Users\Public\Loomy\<sha256(用户名)[:12]>\userData\auth-session.json` |
+| Windows 回落 | `%APPDATA%\Loomy\auth-session.json` |
+
+- 目录名 = `sha256(用户名)` 前 12 位 hex
 - 客户端存储字段：`session` / `userid` / `phone` / `updatedAt`
 - 有效期 14 天（由客户端在登录时指定）；**无续期机制**，到期需重新登录。
 
