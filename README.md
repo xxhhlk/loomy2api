@@ -100,6 +100,40 @@ base = `https://loomyad.xunfei.cn`，鉴权同推理。
 - **思考档位**：上游 `/models` 为每个模型声明 `reasoning_efforts`（实测 8 个模型一致，
   `none` / `low` / `medium` / `high` / `xhigh`，默认 `low`）。
 
+## 最小调用示例
+
+仅示意协议形状（导入 → 调用 → 解析 SSE），非可部署实现。导入型不登录，故无需签名、不含任何密钥。
+
+```python
+# 读会话文件里的 session → POST /chat/completions → 解析 SSE 分片。
+import json, secrets, urllib.request
+
+def traceparent():
+    # 必需，缺失会挂死到超时：00-<16字节hex>-<8字节hex>-01
+    return f"00-{secrets.token_hex(16)}-{secrets.token_hex(8)}-01"
+
+def chat(base_url, session, model, prompt):
+    body = json.dumps({"model": model, "stream": True,
+                       "messages": [{"role": "user", "content": prompt}]}).encode()
+    req = urllib.request.Request(base_url + "/chat/completions", data=body, method="POST")
+    req.add_header("Authorization", f"Bearer {session}")
+    req.add_header("token", session)          # session 模式双写
+    req.add_header("traceparent", traceparent())
+    req.add_header("loomy-version", "0.9.38")
+    req.add_header("Accept", "application/json")
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req) as resp:
+        for raw in resp:                      # 流式：逐行读 data: 分片
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                break
+            delta = json.loads(payload)["choices"][0].get("delta", {})
+            print(delta.get("content", ""), end="", flush=True)
+```
+
 ## 范围与免责
 
 - 仅用于互操作与研究。请遵守目标服务的使用条款。
